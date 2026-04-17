@@ -72,7 +72,7 @@ pub async fn recv_batch(socket: &UdpSocket, buf: &mut BatchBuf) -> io::Result<us
                     fd,
                     msgs.as_mut_ptr(),
                     BATCH_SIZE as libc::c_uint,
-                    libc::MSG_DONTWAIT,
+                    libc::MSG_DONTWAIT as _,
                     std::ptr::null_mut(),
                 )
             };
