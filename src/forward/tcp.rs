@@ -4,15 +4,26 @@ use std::sync::Arc;
 use tokio::net::TcpStream;
 use tracing::warn;
 
+const COPY_BUFFER_BYTES: usize = 256 * 1024;
+
 pub async fn proxy(
     mut downstream: TcpStream,
     peer: SocketAddr,
     target: SocketAddr,
     stats: Arc<PortStats>,
 ) {
+    let _ = downstream.set_nodelay(true);
+
     let result = async {
         let mut upstream = TcpStream::connect(target).await?;
-        tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await
+        let _ = upstream.set_nodelay(true);
+        tokio::io::copy_bidirectional_with_sizes(
+            &mut downstream,
+            &mut upstream,
+            COPY_BUFFER_BYTES,
+            COPY_BUFFER_BYTES,
+        )
+        .await
     }
     .await;
 
