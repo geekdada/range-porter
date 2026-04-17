@@ -17,6 +17,9 @@ tokio-util = { version = "0.7.18", features = ["rt"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 criterion = "0.8.2"
 

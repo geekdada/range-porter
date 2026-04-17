@@ -3,7 +3,10 @@ use std::io;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use tokio::net::{TcpListener, UdpSocket};
 
-const UDP_SOCKET_BUFFER_BYTES: usize = 65_535;
+// 4 MiB fits under macOS kern.ipc.maxsockbuf (8 MiB) and raises Linux
+// SO_RCVBUF/SO_SNDBUF up to net.core.rmem_max/wmem_max (silently capped
+// if the sysctl is lower — admins can raise it for heavy workloads).
+const UDP_SOCKET_BUFFER_BYTES: usize = 4 * 1024 * 1024;
 
 pub fn bind_tcp_listener(address: SocketAddr) -> io::Result<TcpListener> {
     let socket = Socket::new(domain_for(address), Type::STREAM, Some(Protocol::TCP))?;

@@ -234,15 +234,9 @@ impl UdpSessionTable {
 
     pub async fn forward_client_packet(
         &self,
-        source: SocketAddr,
+        session: &UdpSession,
         payload: &[u8],
     ) -> io::Result<()> {
-        let session = self
-            .sessions
-            .get(&source)
-            .map(|entry| entry.value().clone())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "udp session not found"))?;
-
         match forward_to_target(session.upstream(), payload).await {
             Ok(_) => {
                 session.touch();
@@ -250,7 +244,7 @@ impl UdpSessionTable {
                 Ok(())
             }
             Err(error) => {
-                self.remove_session(source, session.id());
+                self.remove_session(session.source(), session.id());
                 Err(error)
             }
         }
