@@ -154,7 +154,7 @@ do_install() {
   log "install dir: $INSTALL_DIR"
 
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  trap "rm -rf -- '$tmp'" EXIT
 
   log "downloading $archive"
   curl -fsSL --retry 3 -o "$tmp/$archive" "$url_base/$archive"
