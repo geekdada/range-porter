@@ -58,6 +58,17 @@ The response includes:
 - per-port current counters
 - recent minute buckets for throughput and connection peaks
 
+## Benchmarks
+
+The repository includes Criterion microbenchmarks for deterministic hot paths such as
+port-set parsing and stats aggregation.
+
+Run the current benchmark suite with:
+
+```bash
+cargo bench --bench core
+```
+
 ## Caveats
 
 - UDP forwarding is session-based. Idle sessions are evicted after `--udp-idle-timeout`.
