@@ -3,6 +3,8 @@ use std::io;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use tokio::net::{TcpListener, UdpSocket};
 
+const UDP_SOCKET_BUFFER_BYTES: usize = 65_535;
+
 pub fn bind_tcp_listener(address: SocketAddr) -> io::Result<TcpListener> {
     let socket = Socket::new(domain_for(address), Type::STREAM, Some(Protocol::TCP))?;
     socket.set_reuse_address(true)?;
@@ -17,6 +19,7 @@ pub fn bind_tcp_listener(address: SocketAddr) -> io::Result<TcpListener> {
 pub fn bind_udp_socket(address: SocketAddr) -> io::Result<UdpSocket> {
     let socket = Socket::new(domain_for(address), Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_reuse_address(true)?;
+    configure_udp_socket(&socket)?;
     socket.bind(&address.into())?;
     socket.set_nonblocking(true)?;
 
@@ -31,12 +34,21 @@ pub fn new_connected_udp_socket(target: SocketAddr) -> io::Result<UdpSocket> {
     };
 
     let socket = Socket::new(domain_for(target), Type::DGRAM, Some(Protocol::UDP))?;
+    configure_udp_socket(&socket)?;
     socket.bind(&bind_addr.into())?;
     socket.connect(&target.into())?;
     socket.set_nonblocking(true)?;
 
     let std_socket: std::net::UdpSocket = socket.into();
     UdpSocket::from_std(std_socket)
+}
+
+fn configure_udp_socket(socket: &Socket) -> io::Result<()> {
+    // macOS defaults UDP send buffers to 9216 bytes, which turns larger
+    // forwarded datagrams into EMSGSIZE even on loopback.
+    socket.set_send_buffer_size(UDP_SOCKET_BUFFER_BYTES)?;
+    socket.set_recv_buffer_size(UDP_SOCKET_BUFFER_BYTES)?;
+    Ok(())
 }
 
 fn domain_for(address: SocketAddr) -> Domain {
