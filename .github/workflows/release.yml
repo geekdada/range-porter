@@ -65,14 +65,14 @@ jobs:
           mkdir -p dist
           gh release download "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern '*.tar.gz.sha256' \
+            --pattern '*.sha256' \
             --dir dist
 
       - name: Aggregate SHA256SUMS
         run: |
           set -euo pipefail
           cd dist
-          cat *.tar.gz.sha256 > ../SHA256SUMS
+          cat *.sha256 > ../SHA256SUMS
           cd ..
           echo '--- SHA256SUMS ---'
           cat SHA256SUMS
