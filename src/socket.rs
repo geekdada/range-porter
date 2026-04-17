@@ -1,0 +1,48 @@
+use socket2::{Domain, Protocol, Socket, Type};
+use std::io;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use tokio::net::{TcpListener, UdpSocket};
+
+pub fn bind_tcp_listener(address: SocketAddr) -> io::Result<TcpListener> {
+    let socket = Socket::new(domain_for(address), Type::STREAM, Some(Protocol::TCP))?;
+    socket.set_reuse_address(true)?;
+    socket.bind(&address.into())?;
+    socket.listen(1024)?;
+    socket.set_nonblocking(true)?;
+
+    let std_listener: std::net::TcpListener = socket.into();
+    TcpListener::from_std(std_listener)
+}
+
+pub fn bind_udp_socket(address: SocketAddr) -> io::Result<UdpSocket> {
+    let socket = Socket::new(domain_for(address), Type::DGRAM, Some(Protocol::UDP))?;
+    socket.set_reuse_address(true)?;
+    socket.bind(&address.into())?;
+    socket.set_nonblocking(true)?;
+
+    let std_socket: std::net::UdpSocket = socket.into();
+    UdpSocket::from_std(std_socket)
+}
+
+pub fn new_connected_udp_socket(target: SocketAddr) -> io::Result<UdpSocket> {
+    let bind_addr = match target {
+        SocketAddr::V4(_) => SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)),
+        SocketAddr::V6(_) => SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0)),
+    };
+
+    let socket = Socket::new(domain_for(target), Type::DGRAM, Some(Protocol::UDP))?;
+    socket.bind(&bind_addr.into())?;
+    socket.connect(&target.into())?;
+    socket.set_nonblocking(true)?;
+
+    let std_socket: std::net::UdpSocket = socket.into();
+    UdpSocket::from_std(std_socket)
+}
+
+fn domain_for(address: SocketAddr) -> Domain {
+    if address.is_ipv4() {
+        Domain::IPV4
+    } else {
+        Domain::IPV6
+    }
+}
