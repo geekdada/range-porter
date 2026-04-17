@@ -21,6 +21,33 @@ This project is meant to be a pragmatic userspace forwarder. It is useful when y
 
 It is **not** a replacement for kernel NAT or `iptables`/`nftables` performance. Packets are still processed in userspace.
 
+## Install
+
+Linux and macOS, latest release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/geekdada/range-porter/master/scripts/install.sh | bash
+```
+
+Pin a version, or pick the glibc build on Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/geekdada/range-porter/master/scripts/install.sh \
+  | bash -s -- --version v0.1.0 --variant gnu
+```
+
+Uninstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/geekdada/range-porter/master/scripts/install.sh \
+  | bash -s -- uninstall
+```
+
+The script downloads the matching `.tar.gz` from [GitHub Releases](https://github.com/geekdada/range-porter/releases),
+verifies it against `SHA256SUMS`, and installs into `/usr/local/bin` by default
+(override with `--install-dir`). Supported targets: `x86_64`/`aarch64` for Linux
+(musl or gnu) and macOS.
+
 ## Usage
 
 ```bash
