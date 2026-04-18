@@ -1,3 +1,3 @@
 pub mod tcp;
 pub mod udp;
-mod udp_batch;
+pub(crate) mod udp_batch;

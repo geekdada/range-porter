@@ -24,7 +24,7 @@ pub struct Cli {
 
     #[arg(
         long,
-        default_value = "60s",
+        default_value = "120s",
         value_parser = parse_duration,
         help = "Idle timeout for UDP session state"
     )]

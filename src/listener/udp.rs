@@ -1,4 +1,4 @@
-use crate::listener::udp_batch::{self, BatchBuf};
+use crate::listener::udp_batch::{self, BatchBuf, LISTENER_BATCH_SIZE, LISTENER_SLOT_SIZE};
 use crate::stats::port::PortStats;
 use crate::udp_session::UdpSessionTable;
 use anyhow::Result;
@@ -25,7 +25,7 @@ pub async fn run(
         shutdown.clone(),
     );
     let cleanup_task = tokio::spawn(Arc::clone(&sessions).cleanup_loop());
-    let mut batch = BatchBuf::new();
+    let mut batch = BatchBuf::new(LISTENER_BATCH_SIZE, LISTENER_SLOT_SIZE);
 
     loop {
         tokio::select! {

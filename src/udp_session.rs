@@ -1,4 +1,5 @@
 use crate::forward::udp::{forward_to_client, forward_to_target};
+use crate::listener::udp_batch::{self, BatchBuf, SESSION_BATCH_SIZE, SESSION_SLOT_SIZE};
 use crate::socket::new_connected_udp_socket;
 use crate::stats::port::PortStats;
 use dashmap::DashMap;
@@ -190,40 +191,52 @@ impl UdpSessionTable {
     }
 
     async fn reply_loop(self: Arc<Self>, session: Arc<UdpSession>) {
-        let mut buffer = vec![0_u8; 65_535];
+        let mut batch = BatchBuf::new(SESSION_BATCH_SIZE, SESSION_SLOT_SIZE);
 
-        loop {
+        'outer: loop {
             tokio::select! {
-                _ = self.shutdown.cancelled() => break,
-                _ = session.shutdown_token().cancelled() => break,
-                result = session.upstream().recv(&mut buffer) => {
+                _ = self.shutdown.cancelled() => break 'outer,
+                _ = session.shutdown_token().cancelled() => break 'outer,
+                result = udp_batch::recv_batch_connected(session.upstream(), &mut batch) => {
                     match result {
-                        Ok(bytes_read) => {
-                            if bytes_read == 0 {
-                                continue;
-                            }
+                        Ok(count) => {
+                            for i in 0..count {
+                                let payload = batch.slot(i);
+                                if payload.is_empty() {
+                                    continue;
+                                }
 
-                            match forward_to_client(
-                                &self.listener_socket,
-                                session.source(),
-                                &buffer[..bytes_read],
-                            )
-                            .await
-                            {
-                                Ok(_) => {
-                                    session.touch();
-                                    self.stats.add_udp_out(bytes_read as u64);
-                                }
-                                Err(error) => {
-                                    warn!(source = %session.source(), ?error, "failed to forward UDP response to client");
-                                    break;
+                                match forward_to_client(
+                                    &self.listener_socket,
+                                    session.source(),
+                                    payload,
+                                )
+                                .await
+                                {
+                                    Ok(_) => {
+                                        session.touch();
+                                        self.stats.add_udp_out(payload.len() as u64);
+                                    }
+                                    Err(error) => {
+                                        warn!(source = %session.source(), ?error, "failed to forward UDP response to client");
+                                        break 'outer;
+                                    }
                                 }
                             }
                         }
-                        Err(error) => {
-                            warn!(source = %session.source(), ?error, "udp session receive loop ended with an error");
-                            break;
-                        }
+                        Err(error) => match error.kind() {
+                            io::ErrorKind::ConnectionRefused
+                            | io::ErrorKind::HostUnreachable
+                            | io::ErrorKind::NetworkUnreachable => {
+                                // Transient ICMP error queued on a connected
+                                // UDP socket — next datagram typically arrives
+                                // fine. Keep the QUIC session alive.
+                            }
+                            _ => {
+                                warn!(source = %session.source(), ?error, "udp session receive loop ended with an error");
+                                break 'outer;
+                            }
+                        },
                     }
                 }
             }
@@ -237,17 +250,16 @@ impl UdpSessionTable {
         session: &UdpSession,
         payload: &[u8],
     ) -> io::Result<()> {
-        match forward_to_target(session.upstream(), payload).await {
-            Ok(_) => {
-                session.touch();
-                self.stats.add_udp_in(payload.len() as u64);
-                Ok(())
-            }
-            Err(error) => {
-                self.remove_session(session.source(), session.id());
-                Err(error)
-            }
-        }
+        // A single send failure must not destroy a long-lived QUIC session:
+        // hysteria clients maintain a persistent connection, and tearing
+        // down the session on a transient ICMP error (e.g. ECONNREFUSED
+        // queued from a dropped upstream packet) would force an unnecessary
+        // QUIC path validation or reconnection. Caller logs the error;
+        // idle timeout reclaims the session if traffic truly stops.
+        forward_to_target(session.upstream(), payload).await?;
+        session.touch();
+        self.stats.add_udp_in(payload.len() as u64);
+        Ok(())
     }
 }
 
