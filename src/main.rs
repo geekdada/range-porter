@@ -19,7 +19,7 @@ async fn main() -> Result<()> {
         listen_host = %startup_config.listen_host,
         listen_ports = ?startup_config.listen_ports,
         target = %startup_config.target,
-        stats_bind = %app.stats_bind(),
+        stats_bind = app.stats_bind().map(|addr| addr.to_string()).unwrap_or_else(|| "disabled".to_string()),
         "range-porter started"
     );
 

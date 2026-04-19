@@ -10,7 +10,7 @@ pub struct RuntimeConfig {
     pub listen_ports: Vec<u16>,
     pub target: SocketAddr,
     pub udp_idle_timeout: Duration,
-    pub stats_bind: SocketAddr,
+    pub stats_bind: Option<SocketAddr>,
     pub stats_window: usize,
     pub summary_interval: Duration,
 }
@@ -21,7 +21,7 @@ impl RuntimeConfig {
         listen_ports: Vec<u16>,
         target: SocketAddr,
         udp_idle_timeout: Duration,
-        stats_bind: SocketAddr,
+        stats_bind: Option<SocketAddr>,
         stats_window: usize,
         summary_interval: Duration,
     ) -> Result<Self> {

@@ -65,13 +65,14 @@ Flags:
 - `--listen-ports`: comma-separated ports and ranges
 - `--target`: shared TCP/UDP target address
 - `--udp-idle-timeout`: inactivity timeout for UDP session entries, default `60s`
-- `--stats-bind`: bind address for the JSON stats endpoint
+- `--stats-bind`: bind address for the JSON stats endpoint; omit to disable (default)
 - `--stats-window`: number of minute buckets to keep in memory
 - `--summary-interval`: periodic log summary interval; use `0s` to disable
 
 ## Stats endpoint
 
-`range-porter` exposes a read-only HTTP endpoint on `GET /stats`.
+`range-porter` can expose a read-only HTTP endpoint on `GET /stats`. It is
+disabled by default; pass `--stats-bind HOST:PORT` to enable it.
 
 Example:
 

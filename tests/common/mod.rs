@@ -29,7 +29,7 @@ pub async fn start_app(listen_port: u16, target: SocketAddr) -> RunningApp {
         vec![listen_port],
         target,
         Duration::from_secs(2),
-        localhost(0),
+        Some(localhost(0)),
         60,
         Duration::from_secs(0),
     )

@@ -32,11 +32,10 @@ pub struct Cli {
 
     #[arg(
         long,
-        default_value = "127.0.0.1:9090",
         value_name = "HOST:PORT",
-        help = "Bind address for the read-only JSON stats endpoint"
+        help = "Bind address for the read-only JSON stats endpoint; disabled when omitted"
     )]
-    pub stats_bind: SocketAddr,
+    pub stats_bind: Option<SocketAddr>,
 
     #[arg(
         long,

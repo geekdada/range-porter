@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub struct RunningApp {
-    stats_bind: SocketAddr,
+    stats_bind: Option<SocketAddr>,
     stats: Arc<StatsRegistry>,
     shutdown: CancellationToken,
     tasks: JoinSet<Result<()>>,
@@ -28,11 +28,18 @@ pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
     ));
     let shutdown = CancellationToken::new();
 
-    let stats_listener = bind_tcp_listener(config.stats_bind)
-        .with_context(|| format!("failed to bind stats listener on {}", config.stats_bind))?;
-    let stats_bind = stats_listener
-        .local_addr()
-        .context("failed to read bound stats address")?;
+    let stats_endpoint = match config.stats_bind {
+        Some(addr) => {
+            let listener = bind_tcp_listener(addr)
+                .with_context(|| format!("failed to bind stats listener on {addr}"))?;
+            let bound = listener
+                .local_addr()
+                .context("failed to read bound stats address")?;
+            Some((listener, bound))
+        }
+        None => None,
+    };
+    let stats_bind = stats_endpoint.as_ref().map(|(_, bound)| *bound);
 
     let mut listeners = Vec::with_capacity(config.listen_ports.len());
     for port in &config.listen_ports {
@@ -65,7 +72,7 @@ pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
         });
     }
 
-    {
+    if let Some((stats_listener, _)) = stats_endpoint {
         let stats = Arc::clone(&stats);
         let shutdown = shutdown.child_token();
         tasks.spawn(async move { http::serve(stats_listener, stats, shutdown).await });
@@ -100,7 +107,7 @@ pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
 }
 
 impl RunningApp {
-    pub fn stats_bind(&self) -> SocketAddr {
+    pub fn stats_bind(&self) -> Option<SocketAddr> {
         self.stats_bind
     }
 
