@@ -19,8 +19,19 @@ pub struct Cli {
     )]
     pub listen_ports: String,
 
-    #[arg(long, value_name = "HOST:PORT", help = "Single TCP/UDP target address")]
-    pub target: SocketAddr,
+    #[arg(
+        long,
+        value_name = "HOST:PORT",
+        help = "Target address; accepts IP:port or domain:port (e.g. example.com:443)"
+    )]
+    pub target: String,
+
+    #[arg(
+        long,
+        value_name = "IP:PORT",
+        help = "Override DNS resolver used for target lookups; defaults to system /etc/resolv.conf"
+    )]
+    pub dns_server: Option<SocketAddr>,
 
     #[arg(
         long,

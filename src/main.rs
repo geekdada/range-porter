@@ -11,14 +11,15 @@ async fn main() -> Result<()> {
     init_tracing();
 
     let cli = Cli::parse();
-    let config = RuntimeConfig::try_from(cli)?;
+    let config = RuntimeConfig::from_cli(cli).await?;
     let startup_config = config.clone();
 
     let app = runtime::start(config).await?;
     info!(
         listen_host = %startup_config.listen_host,
         listen_ports = ?startup_config.listen_ports,
-        target = %startup_config.target,
+        target = startup_config.target.display(),
+        target_addr = %startup_config.target.current(),
         stats_bind = app.stats_bind().map(|addr| addr.to_string()).unwrap_or_else(|| "disabled".to_string()),
         "range-porter started"
     );

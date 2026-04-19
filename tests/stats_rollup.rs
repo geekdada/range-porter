@@ -1,13 +1,8 @@
 use range_porter::stats::StatsRegistry;
-use std::net::{Ipv4Addr, SocketAddr};
-
-fn localhost(port: u16) -> SocketAddr {
-    SocketAddr::from((Ipv4Addr::LOCALHOST, port))
-}
 
 #[test]
 fn rolls_minute_buckets_with_per_minute_deltas() {
-    let stats = StatsRegistry::new(&[4_443], localhost(8_443), 4);
+    let stats = StatsRegistry::new(&[4_443], "127.0.0.1:8443".to_string(), 4);
     let port_stats = stats.port(4_443);
 
     port_stats.record_tcp_accept();

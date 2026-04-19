@@ -3,6 +3,7 @@ use crate::http;
 use crate::listener;
 use crate::socket::{bind_tcp_listener, bind_udp_socket};
 use crate::stats::StatsRegistry;
+use crate::target::TargetAddr;
 use anyhow::{Context, Result, anyhow};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -18,12 +19,12 @@ pub struct RunningApp {
 }
 
 pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
-    let target = config.target;
+    let target: Arc<TargetAddr> = config.target;
     let udp_idle_timeout = config.udp_idle_timeout;
 
     let stats = Arc::new(StatsRegistry::new(
         &config.listen_ports,
-        target,
+        target.display().to_string(),
         config.stats_window,
     ));
     let shutdown = CancellationToken::new();
@@ -84,6 +85,7 @@ pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
         {
             let port_stats = Arc::clone(&port_stats);
             let shutdown = shutdown.child_token();
+            let target = Arc::clone(&target);
             tasks.spawn(async move {
                 listener::tcp::run(tcp_listener, target, port_stats, shutdown).await
             });
@@ -92,6 +94,7 @@ pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
         {
             let port_stats = Arc::clone(&port_stats);
             let shutdown = shutdown.child_token();
+            let target = Arc::clone(&target);
             tasks.spawn(async move {
                 listener::udp::run(udp_socket, target, udp_idle_timeout, port_stats, shutdown).await
             });

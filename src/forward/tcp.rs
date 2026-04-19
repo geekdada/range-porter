@@ -1,4 +1,5 @@
 use crate::stats::port::PortStats;
+use crate::target::TargetAddr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpStream;
@@ -9,13 +10,14 @@ const COPY_BUFFER_BYTES: usize = 256 * 1024;
 pub async fn proxy(
     mut downstream: TcpStream,
     peer: SocketAddr,
-    target: SocketAddr,
+    target: Arc<TargetAddr>,
     stats: Arc<PortStats>,
 ) {
+    let target_addr = target.current();
     let _ = downstream.set_nodelay(true);
 
     let result = async {
-        let mut upstream = TcpStream::connect(target).await?;
+        let mut upstream = TcpStream::connect(target_addr).await?;
         let _ = upstream.set_nodelay(true);
         tokio::io::copy_bidirectional_with_sizes(
             &mut downstream,
@@ -32,7 +34,7 @@ pub async fn proxy(
             stats.add_tcp_bytes(in_bytes, out_bytes);
         }
         Err(error) => {
-            warn!(%peer, %target, ?error, "tcp forwarding task ended with an error");
+            warn!(%peer, target = %target_addr, ?error, "tcp forwarding task ended with an error");
         }
     }
 

@@ -5,14 +5,13 @@ use crate::stats::bucket::{AggregateTotals, BucketRing, MinuteBucket};
 use crate::stats::port::{PortSnapshot, PortStats};
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]
 pub struct StatsRegistry {
-    target: SocketAddr,
+    target: String,
     started_at_epoch: u64,
     window_minutes: usize,
     ports: BTreeMap<u16, Arc<PortStats>>,
@@ -22,7 +21,7 @@ pub struct StatsRegistry {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct StatsSnapshot {
-    pub target: SocketAddr,
+    pub target: String,
     pub started_at_epoch: u64,
     pub generated_at_epoch: u64,
     pub window_minutes: usize,
@@ -32,7 +31,7 @@ pub struct StatsSnapshot {
 }
 
 impl StatsRegistry {
-    pub fn new(listen_ports: &[u16], target: SocketAddr, window_minutes: usize) -> Self {
+    pub fn new(listen_ports: &[u16], target: String, window_minutes: usize) -> Self {
         let ports = listen_ports
             .iter()
             .copied()
@@ -66,7 +65,7 @@ impl StatsRegistry {
             .snapshot();
 
         StatsSnapshot {
-            target: self.target,
+            target: self.target.clone(),
             started_at_epoch: self.started_at_epoch,
             generated_at_epoch: unix_timestamp_now(),
             window_minutes: self.window_minutes,

@@ -1,6 +1,8 @@
 use range_porter::RuntimeConfig;
 use range_porter::runtime::{self, RunningApp};
+use range_porter::target::TargetAddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 
 pub fn localhost(port: u16) -> SocketAddr {
@@ -24,10 +26,14 @@ pub fn available_dual_port() -> u16 {
 }
 
 pub async fn start_app(listen_port: u16, target: SocketAddr) -> RunningApp {
+    let target_addr = TargetAddr::bind(&target.to_string(), None)
+        .await
+        .expect("bind target address");
+
     let config = RuntimeConfig::new(
         IpAddr::V4(Ipv4Addr::LOCALHOST),
         vec![listen_port],
-        target,
+        Arc::new(target_addr),
         Duration::from_secs(2),
         Some(localhost(0)),
         60,

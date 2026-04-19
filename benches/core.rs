@@ -3,16 +3,11 @@ use range_porter::portset::parse_portset;
 use range_porter::stats::StatsRegistry;
 use range_porter::stats::port::PortStats;
 use std::hint::black_box;
-use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
 struct StatsFixture {
     registry: StatsRegistry,
     port_handles: Vec<Arc<PortStats>>,
-}
-
-fn localhost(port: u16) -> SocketAddr {
-    SocketAddr::from((Ipv4Addr::LOCALHOST, port))
 }
 
 fn build_ports(port_count: usize) -> Vec<u16> {
@@ -23,7 +18,7 @@ fn build_ports(port_count: usize) -> Vec<u16> {
 
 fn seeded_stats_fixture(port_count: usize) -> StatsFixture {
     let ports = build_ports(port_count);
-    let registry = StatsRegistry::new(&ports, localhost(8_443), 8);
+    let registry = StatsRegistry::new(&ports, "127.0.0.1:8443".to_string(), 8);
     let port_handles: Vec<_> = ports
         .iter()
         .copied()

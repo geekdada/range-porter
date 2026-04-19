@@ -1,7 +1,7 @@
 use crate::forward;
 use crate::stats::port::PortStats;
+use crate::target::TargetAddr;
 use anyhow::Result;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
@@ -10,7 +10,7 @@ use tracing::warn;
 
 pub async fn run(
     listener: TcpListener,
-    target: SocketAddr,
+    target: Arc<TargetAddr>,
     stats: Arc<PortStats>,
     shutdown: CancellationToken,
 ) -> Result<()> {
@@ -25,12 +25,13 @@ pub async fn run(
                         stats.record_tcp_accept();
 
                         let stats = Arc::clone(&stats);
+                        let target = Arc::clone(&target);
                         connections.spawn(async move {
                             forward::tcp::proxy(stream, peer, target, stats).await;
                         });
                     }
                     Err(error) => {
-                        warn!(%target, ?error, "tcp accept failed");
+                        warn!(target = %target.display(), ?error, "tcp accept failed");
                     }
                 }
             }

@@ -1,14 +1,16 @@
 use crate::cli::Cli;
 use crate::portset::parse_portset;
+use crate::target::TargetAddr;
 use anyhow::{Result, bail};
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
     pub listen_host: IpAddr,
     pub listen_ports: Vec<u16>,
-    pub target: SocketAddr,
+    pub target: Arc<TargetAddr>,
     pub udp_idle_timeout: Duration,
     pub stats_bind: Option<SocketAddr>,
     pub stats_window: usize,
@@ -19,7 +21,7 @@ impl RuntimeConfig {
     pub fn new(
         listen_host: IpAddr,
         listen_ports: Vec<u16>,
-        target: SocketAddr,
+        target: Arc<TargetAddr>,
         udp_idle_timeout: Duration,
         stats_bind: Option<SocketAddr>,
         stats_window: usize,
@@ -47,17 +49,14 @@ impl RuntimeConfig {
             summary_interval,
         })
     }
-}
 
-impl TryFrom<Cli> for RuntimeConfig {
-    type Error = anyhow::Error;
-
-    fn try_from(cli: Cli) -> Result<Self> {
+    pub async fn from_cli(cli: Cli) -> Result<Self> {
         let listen_ports = parse_portset(&cli.listen_ports)?;
+        let target = Arc::new(TargetAddr::bind(&cli.target, cli.dns_server).await?);
         Self::new(
             cli.listen_host,
             listen_ports,
-            cli.target,
+            target,
             cli.udp_idle_timeout,
             cli.stats_bind,
             cli.stats_window,

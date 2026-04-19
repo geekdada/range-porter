@@ -1,8 +1,8 @@
 use crate::listener::udp_batch::{self, BatchBuf, LISTENER_BATCH_SIZE, LISTENER_SLOT_SIZE};
 use crate::stats::port::PortStats;
+use crate::target::TargetAddr;
 use crate::udp_session::UdpSessionTable;
 use anyhow::Result;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
@@ -11,14 +11,14 @@ use tracing::warn;
 
 pub async fn run(
     socket: UdpSocket,
-    target: SocketAddr,
+    target: Arc<TargetAddr>,
     idle_timeout: Duration,
     stats: Arc<PortStats>,
     shutdown: CancellationToken,
 ) -> Result<()> {
     let socket = Arc::new(socket);
     let sessions = UdpSessionTable::new(
-        target,
+        Arc::clone(&target),
         idle_timeout,
         Arc::clone(&socket),
         Arc::clone(&stats),
@@ -46,17 +46,17 @@ pub async fn run(
                                         .forward_client_packet(&session, payload)
                                         .await
                                     {
-                                        warn!(%source, %target, ?error, "failed to forward UDP datagram to target");
+                                        warn!(%source, target = %target.display(), ?error, "failed to forward UDP datagram to target");
                                     }
                                 }
                                 Err(error) => {
-                                    warn!(%source, %target, ?error, "failed to create UDP session");
+                                    warn!(%source, target = %target.display(), ?error, "failed to create UDP session");
                                 }
                             }
                         }
                     }
                     Err(error) => {
-                        warn!(%target, ?error, "udp receive loop failed");
+                        warn!(target = %target.display(), ?error, "udp receive loop failed");
                     }
                 }
             }

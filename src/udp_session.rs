@@ -2,6 +2,7 @@ use crate::forward::udp::{forward_to_client, forward_to_target};
 use crate::listener::udp_batch::{self, BatchBuf, SESSION_BATCH_SIZE, SESSION_SLOT_SIZE};
 use crate::socket::new_connected_udp_socket;
 use crate::stats::port::PortStats;
+use crate::target::TargetAddr;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::cmp;
@@ -26,7 +27,7 @@ pub struct UdpSession {
 
 #[derive(Debug)]
 pub struct UdpSessionTable {
-    target: SocketAddr,
+    target: Arc<TargetAddr>,
     idle_timeout: Duration,
     listener_socket: Arc<UdpSocket>,
     stats: Arc<PortStats>,
@@ -83,7 +84,7 @@ impl UdpSession {
 
 impl UdpSessionTable {
     pub fn new(
-        target: SocketAddr,
+        target: Arc<TargetAddr>,
         idle_timeout: Duration,
         listener_socket: Arc<UdpSocket>,
         stats: Arc<PortStats>,
@@ -110,7 +111,7 @@ impl UdpSessionTable {
             return Ok(session);
         }
 
-        let upstream = Arc::new(new_connected_udp_socket(self.target)?);
+        let upstream = Arc::new(new_connected_udp_socket(self.target.current())?);
         let session = Arc::new(UdpSession::new(
             self.next_session_id.fetch_add(1, Ordering::Relaxed),
             source,
