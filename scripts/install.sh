@@ -114,8 +114,11 @@ resolve_tag() {
   fi
   local api="https://api.github.com/repos/${REPO}/releases/latest"
   # Extract "tag_name": "vX.Y.Z" without jq.
-  local tag
-  tag="$(curl -fsSL "$api" \
+  # Buffer the response first so curl doesn't hit SIGPIPE when grep -m1 closes
+  # the pipe early ("curl: (23) Failed writing body").
+  local body tag
+  body="$(curl -fsSL "$api")"
+  tag="$(printf '%s\n' "$body" \
     | grep -m1 '"tag_name"' \
     | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')"
   [ -n "$tag" ] || die "failed to resolve latest release tag from $api"
