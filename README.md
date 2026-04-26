@@ -26,20 +26,20 @@ It is **not** a replacement for kernel NAT or `iptables`/`nftables` performance.
 Linux and macOS, latest release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/geekdada/range-porter/master/scripts/install.sh | bash
+curl -fsSL https://308.li/range-porter | bash
 ```
 
 Pin a version, or pick the glibc build on Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/geekdada/range-porter/master/scripts/install.sh \
+curl -fsSL https://308.li/range-porter \
   | bash -s -- --version v0.1.0 --variant gnu
 ```
 
 Uninstall:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/geekdada/range-porter/master/scripts/install.sh \
+curl -fsSL https://308.li/range-porter \
   | bash -s -- uninstall
 ```
 
