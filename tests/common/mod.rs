@@ -26,6 +26,14 @@ pub fn available_dual_port() -> u16 {
 }
 
 pub async fn start_app(listen_port: u16, target: SocketAddr) -> RunningApp {
+    start_app_with_tcp_cap(listen_port, target, 1024).await
+}
+
+pub async fn start_app_with_tcp_cap(
+    listen_port: u16,
+    target: SocketAddr,
+    max_tcp_connections: usize,
+) -> RunningApp {
     let target_addr = TargetAddr::bind(&target.to_string(), None)
         .await
         .expect("bind target address");
@@ -38,6 +46,7 @@ pub async fn start_app(listen_port: u16, target: SocketAddr) -> RunningApp {
         Some(localhost(0)),
         60,
         Duration::from_secs(0),
+        max_tcp_connections,
     )
     .expect("build runtime config");
 

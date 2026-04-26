@@ -15,9 +15,11 @@ pub struct RuntimeConfig {
     pub stats_bind: Option<SocketAddr>,
     pub stats_window: usize,
     pub summary_interval: Duration,
+    pub max_tcp_connections: usize,
 }
 
 impl RuntimeConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         listen_host: IpAddr,
         listen_ports: Vec<u16>,
@@ -26,6 +28,7 @@ impl RuntimeConfig {
         stats_bind: Option<SocketAddr>,
         stats_window: usize,
         summary_interval: Duration,
+        max_tcp_connections: usize,
     ) -> Result<Self> {
         if listen_ports.is_empty() {
             bail!("at least one listen port is required");
@@ -39,6 +42,10 @@ impl RuntimeConfig {
             bail!("stats window must be greater than 0");
         }
 
+        if max_tcp_connections == 0 {
+            bail!("max tcp connections must be greater than 0");
+        }
+
         Ok(Self {
             listen_host,
             listen_ports,
@@ -47,6 +54,7 @@ impl RuntimeConfig {
             stats_bind,
             stats_window,
             summary_interval,
+            max_tcp_connections,
         })
     }
 
@@ -61,6 +69,7 @@ impl RuntimeConfig {
             cli.stats_bind,
             cli.stats_window,
             cli.summary_interval,
+            cli.max_tcp_connections,
         )
     }
 }

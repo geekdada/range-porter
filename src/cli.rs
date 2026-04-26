@@ -62,6 +62,13 @@ pub struct Cli {
         help = "Periodic stdout/log summary interval; set to 0s to disable"
     )]
     pub summary_interval: Duration,
+
+    #[arg(
+        long,
+        default_value_t = 65536,
+        help = "Maximum concurrent TCP connections across all listen ports; new accepts block once reached"
+    )]
+    pub max_tcp_connections: usize,
 }
 
 pub fn parse_duration(input: &str) -> Result<Duration, String> {

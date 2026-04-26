@@ -7,6 +7,7 @@ use crate::target::TargetAddr;
 use anyhow::{Context, Result, anyhow};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -16,11 +17,13 @@ pub struct RunningApp {
     stats: Arc<StatsRegistry>,
     shutdown: CancellationToken,
     tasks: JoinSet<Result<()>>,
+    tcp_semaphore: Arc<Semaphore>,
 }
 
 pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
     let target: Arc<TargetAddr> = config.target;
     let udp_idle_timeout = config.udp_idle_timeout;
+    let tcp_semaphore = Arc::new(Semaphore::new(config.max_tcp_connections));
 
     let stats = Arc::new(StatsRegistry::new(
         &config.listen_ports,
@@ -86,8 +89,9 @@ pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
             let port_stats = Arc::clone(&port_stats);
             let shutdown = shutdown.child_token();
             let target = Arc::clone(&target);
+            let semaphore = Arc::clone(&tcp_semaphore);
             tasks.spawn(async move {
-                listener::tcp::run(tcp_listener, target, port_stats, shutdown).await
+                listener::tcp::run(tcp_listener, target, port_stats, semaphore, shutdown).await
             });
         }
 
@@ -106,6 +110,7 @@ pub async fn start(config: RuntimeConfig) -> Result<RunningApp> {
         stats,
         shutdown,
         tasks,
+        tcp_semaphore,
     })
 }
 
@@ -120,6 +125,8 @@ impl RunningApp {
 
     pub async fn shutdown(mut self) -> Result<()> {
         self.shutdown.cancel();
+        // Wake any TCP listeners parked on `acquire_owned`.
+        self.tcp_semaphore.close();
         let mut first_error = None;
 
         while let Some(join_result) = self.tasks.join_next().await {
