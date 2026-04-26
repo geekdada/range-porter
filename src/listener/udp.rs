@@ -1,4 +1,5 @@
 use crate::listener::udp_batch::{self, BatchBuf, LISTENER_BATCH_SIZE, LISTENER_SLOT_SIZE};
+use crate::listener::udp_send;
 use crate::stats::port::PortStats;
 use crate::target::TargetAddr;
 use crate::udp_session::UdpSessionTable;
@@ -17,12 +18,17 @@ pub async fn run(
     shutdown: CancellationToken,
 ) -> Result<()> {
     let socket = Arc::new(socket);
-    let sessions = UdpSessionTable::new(
-        Arc::clone(&target),
-        idle_timeout,
+    let (reply_tx, reply_handle) = udp_send::spawn_reply_sender(
         Arc::clone(&socket),
         Arc::clone(&stats),
         shutdown.clone(),
+    );
+    let sessions = UdpSessionTable::new(
+        Arc::clone(&target),
+        idle_timeout,
+        Arc::clone(&stats),
+        shutdown.clone(),
+        reply_tx,
     );
     let cleanup_task = tokio::spawn(Arc::clone(&sessions).cleanup_loop());
     let mut batch = BatchBuf::new(LISTENER_BATCH_SIZE, LISTENER_SLOT_SIZE);
@@ -67,6 +73,12 @@ pub async fn run(
 
     if let Err(error) = cleanup_task.await {
         warn!(?error, "udp cleanup task panicked");
+    }
+
+    // Drop the table (and its Sender) so the reply task drains and exits.
+    drop(sessions);
+    if let Err(error) = reply_handle.await {
+        warn!(?error, "udp reply sender task panicked");
     }
 
     Ok(())

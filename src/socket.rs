@@ -9,7 +9,7 @@ use tokio::net::{TcpListener, UdpSocket};
 const UDP_SOCKET_BUFFER_BYTES: usize = 4 * 1024 * 1024;
 
 pub fn bind_tcp_listener(address: SocketAddr) -> io::Result<TcpListener> {
-    let socket = Socket::new(domain_for(address), Type::STREAM, Some(Protocol::TCP))?;
+    let socket = Socket::new(domain_for(&address), Type::STREAM, Some(Protocol::TCP))?;
     socket.set_reuse_address(true)?;
     socket.bind(&address.into())?;
     socket.listen(1024)?;
@@ -20,7 +20,7 @@ pub fn bind_tcp_listener(address: SocketAddr) -> io::Result<TcpListener> {
 }
 
 pub fn bind_udp_socket(address: SocketAddr) -> io::Result<UdpSocket> {
-    let socket = Socket::new(domain_for(address), Type::DGRAM, Some(Protocol::UDP))?;
+    let socket = Socket::new(domain_for(&address), Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_reuse_address(true)?;
     configure_udp_socket(&socket)?;
     socket.bind(&address.into())?;
@@ -36,7 +36,7 @@ pub fn new_connected_udp_socket(target: SocketAddr) -> io::Result<UdpSocket> {
         SocketAddr::V6(_) => SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0)),
     };
 
-    let socket = Socket::new(domain_for(target), Type::DGRAM, Some(Protocol::UDP))?;
+    let socket = Socket::new(domain_for(&target), Type::DGRAM, Some(Protocol::UDP))?;
     configure_udp_socket(&socket)?;
     socket.bind(&bind_addr.into())?;
     socket.connect(&target.into())?;
@@ -54,7 +54,7 @@ fn configure_udp_socket(socket: &Socket) -> io::Result<()> {
     Ok(())
 }
 
-fn domain_for(address: SocketAddr) -> Domain {
+fn domain_for(address: &SocketAddr) -> Domain {
     if address.is_ipv4() {
         Domain::IPV4
     } else {

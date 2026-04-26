@@ -133,3 +133,81 @@ async fn forwards_large_udp_datagrams_and_replies() {
 
     app.shutdown().await.expect("shutdown range-porter");
 }
+
+#[tokio::test]
+async fn batches_replies_across_multiple_clients() {
+    // Echo every datagram unchanged. The shared mpsc + sendmmsg path
+    // should fan in replies for several clients without losing packets.
+    let target_socket = UdpSocket::bind(localhost(0))
+        .await
+        .expect("bind target udp socket");
+    let target_addr = target_socket.local_addr().expect("read target UDP addr");
+
+    const CLIENTS: usize = 4;
+    const PER_CLIENT: usize = 50;
+    let total = CLIENTS * PER_CLIENT;
+
+    let echo_task = tokio::spawn(async move {
+        let mut buffer = [0_u8; 64];
+        for _ in 0..total {
+            let (bytes_read, peer) = target_socket
+                .recv_from(&mut buffer)
+                .await
+                .expect("recv target UDP");
+            target_socket
+                .send_to(&buffer[..bytes_read], peer)
+                .await
+                .expect("send target UDP");
+        }
+    });
+
+    let listen_port = available_dual_port();
+    let app = start_app(listen_port, target_addr).await;
+
+    let mut client_tasks = Vec::with_capacity(CLIENTS);
+    for client_id in 0..CLIENTS {
+        let task = tokio::spawn(async move {
+            let client = UdpSocket::bind(localhost(0))
+                .await
+                .expect("bind client udp socket");
+            let mut received = 0_usize;
+            for seq in 0..PER_CLIENT {
+                let payload = format!("c{client_id}-s{seq}");
+                client
+                    .send_to(payload.as_bytes(), localhost(listen_port))
+                    .await
+                    .expect("send client datagram");
+                let mut buf = [0_u8; 64];
+                let (bytes_read, _) =
+                    timeout(Duration::from_secs(3), client.recv_from(&mut buf))
+                        .await
+                        .expect("client recv timed out")
+                        .expect("recv echoed datagram");
+                assert_eq!(&buf[..bytes_read], payload.as_bytes());
+                received += 1;
+            }
+            received
+        });
+        client_tasks.push(task);
+    }
+
+    let mut total_received = 0_usize;
+    for handle in client_tasks {
+        total_received += handle.await.expect("client task");
+    }
+    assert_eq!(total_received, total);
+    echo_task.await.expect("target echo task");
+
+    sleep(Duration::from_millis(100)).await;
+
+    let snapshot = app.snapshot();
+    let total_bytes: u64 = (0..CLIENTS)
+        .flat_map(|c| (0..PER_CLIENT).map(move |s| format!("c{c}-s{s}").len() as u64))
+        .sum();
+    assert_eq!(snapshot.totals.udp_in_bytes, total_bytes);
+    assert_eq!(snapshot.totals.udp_out_bytes, total_bytes);
+    assert_eq!(snapshot.totals.udp_dropped, 0);
+    assert_eq!(snapshot.totals.udp_active_flows as usize, CLIENTS);
+
+    app.shutdown().await.expect("shutdown range-porter");
+}

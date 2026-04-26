@@ -9,6 +9,7 @@ pub mod socket;
 pub mod stats;
 pub mod target;
 pub mod udp_session;
+pub(crate) mod util;
 
 pub use config::RuntimeConfig;
 pub use runtime::{RunningApp, start};

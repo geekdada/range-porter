@@ -113,7 +113,7 @@ pub async fn recv_batch(socket: &UdpSocket, buf: &mut BatchBuf) -> io::Result<us
             let received = received as usize;
             for i in 0..received {
                 buf.lens[i] = msgs[i].msg_len as usize;
-                buf.addrs[i] = unsafe { sockaddr_storage_to_socket_addr(&sockaddrs[i]) };
+                buf.addrs[i] = sockaddr_storage_to_socket_addr(&sockaddrs[i]);
             }
             Ok(received)
         });
@@ -185,8 +185,108 @@ pub async fn recv_batch_connected(socket: &UdpSocket, buf: &mut BatchBuf) -> io:
     }
 }
 
+/// Reply packet enqueued by per-session reply loops, drained by the shared
+/// batched sender task. Owns its payload so the recv slot is free to be
+/// reused immediately by the upstream batch buffer.
+pub struct ReplyPacket {
+    pub dst: SocketAddr,
+    pub payload: Vec<u8>,
+    pub bytes: usize,
+}
+
+/// Send up to `packets.len()` datagrams in a single `sendmmsg` syscall on
+/// Linux. Returns the count of datagrams accepted by the kernel; callers
+/// should retry the remainder. Per-packet failures end the batch (the
+/// kernel reports them via the per-message `msg_len`/`errno` semantics
+/// only for the first failed slot — subsequent slots are simply not sent).
 #[cfg(target_os = "linux")]
-unsafe fn sockaddr_storage_to_socket_addr(storage: &libc::sockaddr_storage) -> Option<SocketAddr> {
+pub fn send_batch(socket: &UdpSocket, packets: &[ReplyPacket]) -> io::Result<usize> {
+    use std::mem;
+    use std::os::fd::AsRawFd;
+
+    if packets.is_empty() {
+        return Ok(0);
+    }
+
+    let count = packets.len().min(MAX_BATCH_SIZE);
+
+    let fd = socket.as_raw_fd();
+    let mut iovs: [libc::iovec; MAX_BATCH_SIZE] = unsafe { mem::zeroed() };
+    let mut msgs: [libc::mmsghdr; MAX_BATCH_SIZE] = unsafe { mem::zeroed() };
+    let mut sockaddrs: [libc::sockaddr_storage; MAX_BATCH_SIZE] = unsafe { mem::zeroed() };
+    let mut sockaddr_lens: [libc::socklen_t; MAX_BATCH_SIZE] = [0; MAX_BATCH_SIZE];
+
+    for i in 0..count {
+        let pkt = &packets[i];
+        sockaddr_lens[i] = socket_addr_to_sockaddr_storage(&pkt.dst, &mut sockaddrs[i]);
+
+        iovs[i].iov_base = pkt.payload.as_ptr() as *mut libc::c_void;
+        iovs[i].iov_len = pkt.payload.len();
+
+        msgs[i].msg_hdr.msg_iov = &mut iovs[i] as *mut libc::iovec;
+        msgs[i].msg_hdr.msg_iovlen = 1;
+        msgs[i].msg_hdr.msg_name =
+            &mut sockaddrs[i] as *mut libc::sockaddr_storage as *mut libc::c_void;
+        msgs[i].msg_hdr.msg_namelen = sockaddr_lens[i];
+    }
+
+    let sent = unsafe {
+        libc::sendmmsg(
+            fd,
+            msgs.as_mut_ptr(),
+            count as libc::c_uint,
+            libc::MSG_DONTWAIT as _,
+        )
+    };
+
+    if sent < 0 {
+        let err = io::Error::last_os_error();
+        // EAGAIN: kernel send buffer full; signal the caller.
+        return Err(err);
+    }
+    Ok(sent as usize)
+}
+
+/// Non-Linux fallback uses sequential `try_send_to` calls. The function
+/// signature is kept identical so the calling code does not branch.
+#[cfg(not(target_os = "linux"))]
+pub fn send_batch(socket: &UdpSocket, packets: &[ReplyPacket]) -> io::Result<usize> {
+    let mut sent = 0;
+    for pkt in packets {
+        match socket.try_send_to(&pkt.payload, pkt.dst) {
+            Ok(_) => sent += 1,
+            Err(error) => {
+                if sent == 0 {
+                    return Err(error);
+                }
+                break;
+            }
+        }
+    }
+    Ok(sent)
+}
+
+#[cfg(target_os = "linux")]
+fn socket_addr_to_sockaddr_storage(
+    addr: &SocketAddr,
+    storage: &mut libc::sockaddr_storage,
+) -> libc::socklen_t {
+    // socket2's SockAddr handles platform layout; copy its bytes verbatim
+    // into our caller-owned sockaddr_storage scratch.
+    let sock_addr: socket2::SockAddr = (*addr).into();
+    let len = sock_addr.len();
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            sock_addr.as_ptr() as *const u8,
+            storage as *mut libc::sockaddr_storage as *mut u8,
+            len as usize,
+        );
+    }
+    len
+}
+
+#[cfg(target_os = "linux")]
+fn sockaddr_storage_to_socket_addr(storage: &libc::sockaddr_storage) -> Option<SocketAddr> {
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 
     match storage.ss_family as libc::c_int {

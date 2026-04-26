@@ -3,10 +3,11 @@ pub mod port;
 
 use crate::stats::bucket::{AggregateTotals, BucketRing, MinuteBucket};
 use crate::stats::port::{PortSnapshot, PortStats};
+use crate::util::unix_timestamp_now;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]
@@ -122,14 +123,10 @@ fn aggregate_from_snapshots(port_snapshots: &[PortSnapshot]) -> AggregateTotals 
         totals.tcp_out_bytes += snapshot.tcp_out_bytes;
         totals.udp_in_bytes += snapshot.udp_in_bytes;
         totals.udp_out_bytes += snapshot.udp_out_bytes;
+        totals.udp_dropped += snapshot.udp_dropped;
     }
 
     totals
 }
 
-fn unix_timestamp_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock drifted before unix epoch")
-        .as_secs()
-}
+

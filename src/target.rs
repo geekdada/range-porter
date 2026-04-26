@@ -52,7 +52,7 @@ impl TargetAddr {
         }
 
         let resolver = build_resolver(dns_server)?;
-        let resolved = resolve_once(&resolver, &host, port)
+        let (resolved, _ttl) = resolve_once(&resolver, &host, port)
             .await
             .with_context(|| format!("failed to resolve target host `{host}`"))?;
 
@@ -108,11 +108,11 @@ impl DynamicTarget {
         tokio::spawn(async move {
             let outcome = resolve_once(&target.resolver, &target.host, target.port).await;
             let next = match outcome {
-                Ok(resolved) => {
+                Ok((resolved, ttl)) => {
                     debug!(
                         host = %target.host,
                         addr = %resolved.addr,
-                        ttl_secs = resolved.valid_until.saturating_duration_since(Instant::now()).as_secs(),
+                        ttl_secs = ttl.as_secs(),
                         "refreshed target resolution",
                     );
                     resolved
@@ -195,7 +195,11 @@ fn build_resolver(dns_server: Option<SocketAddr>) -> Result<TokioResolver> {
     Ok(builder.build())
 }
 
-async fn resolve_once(resolver: &TokioResolver, host: &str, port: u16) -> Result<Resolved> {
+async fn resolve_once(
+    resolver: &TokioResolver,
+    host: &str,
+    port: u16,
+) -> Result<(Resolved, Duration)> {
     let lookup = resolver
         .lookup_ip(host)
         .await
@@ -211,10 +215,13 @@ async fn resolve_once(resolver: &TokioResolver, host: &str, port: u16) -> Result
     let raw_ttl = ttl_deadline.saturating_duration_since(now);
     let clamped_ttl = raw_ttl.clamp(DNS_POSITIVE_MIN_TTL, DNS_POSITIVE_MAX_TTL);
 
-    Ok(Resolved {
-        addr: SocketAddr::new(addr, port),
-        valid_until: now + clamped_ttl,
-    })
+    Ok((
+        Resolved {
+            addr: SocketAddr::new(addr, port),
+            valid_until: now + clamped_ttl,
+        },
+        clamped_ttl,
+    ))
 }
 
 #[cfg(test)]

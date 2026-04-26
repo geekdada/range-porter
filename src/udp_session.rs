@@ -1,8 +1,9 @@
-use crate::forward::udp::{forward_to_client, forward_to_target};
-use crate::listener::udp_batch::{self, BatchBuf, SESSION_BATCH_SIZE, SESSION_SLOT_SIZE};
+use crate::forward::udp::forward_to_target;
+use crate::listener::udp_batch::{self, BatchBuf, ReplyPacket, SESSION_BATCH_SIZE, SESSION_SLOT_SIZE};
 use crate::socket::new_connected_udp_socket;
 use crate::stats::port::PortStats;
 use crate::target::TargetAddr;
+use crate::util::unix_timestamp_now;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::cmp;
@@ -10,10 +11,11 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{debug, warn};
 
 #[derive(Debug)]
 pub struct UdpSession {
@@ -29,9 +31,9 @@ pub struct UdpSession {
 pub struct UdpSessionTable {
     target: Arc<TargetAddr>,
     idle_timeout: Duration,
-    listener_socket: Arc<UdpSocket>,
     stats: Arc<PortStats>,
     shutdown: CancellationToken,
+    reply_tx: mpsc::Sender<ReplyPacket>,
     next_session_id: AtomicU64,
     sessions: DashMap<SocketAddr, Arc<UdpSession>>,
 }
@@ -86,16 +88,16 @@ impl UdpSessionTable {
     pub fn new(
         target: Arc<TargetAddr>,
         idle_timeout: Duration,
-        listener_socket: Arc<UdpSocket>,
         stats: Arc<PortStats>,
         shutdown: CancellationToken,
+        reply_tx: mpsc::Sender<ReplyPacket>,
     ) -> Arc<Self> {
         Arc::new(Self {
             target,
             idle_timeout,
-            listener_socket,
             stats,
             shutdown,
+            reply_tx,
             next_session_id: AtomicU64::new(1),
             sessions: DashMap::new(),
         })
@@ -207,19 +209,28 @@ impl UdpSessionTable {
                                     continue;
                                 }
 
-                                match forward_to_client(
-                                    &self.listener_socket,
-                                    session.source(),
-                                    payload,
-                                )
-                                .await
-                                {
-                                    Ok(_) => {
+                                let bytes = payload.len();
+                                let packet = ReplyPacket {
+                                    dst: session.source(),
+                                    payload: payload.to_vec(),
+                                    bytes,
+                                };
+
+                                match self.reply_tx.try_send(packet) {
+                                    Ok(()) => {
+                                        // Stats `add_udp_out` accounted by the
+                                        // sender task on send-success.
                                         session.touch();
-                                        self.stats.add_udp_out(payload.len() as u64);
                                     }
-                                    Err(error) => {
-                                        warn!(source = %session.source(), ?error, "failed to forward UDP response to client");
+                                    Err(mpsc::error::TrySendError::Full(_)) => {
+                                        self.stats.record_udp_drop();
+                                        debug!(
+                                            source = %session.source(),
+                                            "udp reply queue full; datagram dropped",
+                                        );
+                                    }
+                                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                                        // Sender task exited (shutdown) — bail.
                                         break 'outer;
                                     }
                                 }
@@ -264,9 +275,4 @@ impl UdpSessionTable {
     }
 }
 
-fn unix_timestamp_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock drifted before unix epoch")
-        .as_secs()
-}
+

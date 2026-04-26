@@ -12,6 +12,7 @@ pub struct PortStats {
     tcp_out_bytes: AtomicU64,
     udp_in_bytes: AtomicU64,
     udp_out_bytes: AtomicU64,
+    udp_dropped: AtomicU64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -25,6 +26,7 @@ pub struct PortSnapshot {
     pub tcp_out_bytes: u64,
     pub udp_in_bytes: u64,
     pub udp_out_bytes: u64,
+    pub udp_dropped: u64,
 }
 
 impl PortStats {
@@ -39,6 +41,7 @@ impl PortStats {
             tcp_out_bytes: AtomicU64::new(0),
             udp_in_bytes: AtomicU64::new(0),
             udp_out_bytes: AtomicU64::new(0),
+            udp_dropped: AtomicU64::new(0),
         }
     }
 
@@ -73,6 +76,10 @@ impl PortStats {
         self.udp_out_bytes.fetch_add(bytes, Ordering::Relaxed);
     }
 
+    pub fn record_udp_drop(&self) {
+        self.udp_dropped.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn snapshot(&self) -> PortSnapshot {
         PortSnapshot {
             port: self.port,
@@ -84,6 +91,7 @@ impl PortStats {
             tcp_out_bytes: self.tcp_out_bytes.load(Ordering::Relaxed),
             udp_in_bytes: self.udp_in_bytes.load(Ordering::Relaxed),
             udp_out_bytes: self.udp_out_bytes.load(Ordering::Relaxed),
+            udp_dropped: self.udp_dropped.load(Ordering::Relaxed),
         }
     }
 }

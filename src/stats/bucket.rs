@@ -10,6 +10,7 @@ pub struct AggregateTotals {
     pub tcp_out_bytes: u64,
     pub udp_in_bytes: u64,
     pub udp_out_bytes: u64,
+    pub udp_dropped: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
