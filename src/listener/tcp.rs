@@ -26,8 +26,9 @@ pub async fn run(
 
                         let stats = Arc::clone(&stats);
                         let target = Arc::clone(&target);
+                        let shutdown = shutdown.child_token();
                         connections.spawn(async move {
-                            forward::tcp::proxy(stream, peer, target, stats).await;
+                            forward::tcp::proxy(stream, peer, target, stats, shutdown).await;
                         });
                     }
                     Err(error) => {

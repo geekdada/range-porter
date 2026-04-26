@@ -3,6 +3,7 @@ use crate::target::TargetAddr;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpStream;
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 const COPY_BUFFER_BYTES: usize = 256 * 1024;
@@ -12,11 +13,12 @@ pub async fn proxy(
     peer: SocketAddr,
     target: Arc<TargetAddr>,
     stats: Arc<PortStats>,
+    shutdown: CancellationToken,
 ) {
     let target_addr = target.current();
     let _ = downstream.set_nodelay(true);
 
-    let result = async {
+    let forwarding = async {
         let mut upstream = TcpStream::connect(target_addr).await?;
         let _ = upstream.set_nodelay(true);
         tokio::io::copy_bidirectional_with_sizes(
@@ -26,15 +28,19 @@ pub async fn proxy(
             COPY_BUFFER_BYTES,
         )
         .await
-    }
-    .await;
+    };
 
-    match result {
-        Ok((in_bytes, out_bytes)) => {
-            stats.add_tcp_bytes(in_bytes, out_bytes);
-        }
-        Err(error) => {
-            warn!(%peer, target = %target_addr, ?error, "tcp forwarding task ended with an error");
+    tokio::select! {
+        _ = shutdown.cancelled() => {}
+        result = forwarding => {
+            match result {
+                Ok((in_bytes, out_bytes)) => {
+                    stats.add_tcp_bytes(in_bytes, out_bytes);
+                }
+                Err(error) => {
+                    warn!(%peer, target = %target_addr, ?error, "tcp forwarding task ended with an error");
+                }
+            }
         }
     }
 

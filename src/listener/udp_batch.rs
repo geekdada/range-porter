@@ -82,8 +82,7 @@ pub async fn recv_batch(socket: &UdpSocket, buf: &mut BatchBuf) -> io::Result<us
 
             let mut iovs: [libc::iovec; MAX_BATCH_SIZE] = unsafe { mem::zeroed() };
             let mut msgs: [libc::mmsghdr; MAX_BATCH_SIZE] = unsafe { mem::zeroed() };
-            let mut sockaddrs: [libc::sockaddr_storage; MAX_BATCH_SIZE] =
-                unsafe { mem::zeroed() };
+            let mut sockaddrs: [libc::sockaddr_storage; MAX_BATCH_SIZE] = unsafe { mem::zeroed() };
 
             for i in 0..batch {
                 let slot = buf.slot_mut_full(i);
@@ -132,10 +131,7 @@ pub async fn recv_batch(socket: &UdpSocket, buf: &mut BatchBuf) -> io::Result<us
 /// (msg_name = NULL). Intended for per-session upstream reply batching.
 #[cfg(target_os = "linux")]
 #[allow(clippy::needless_range_loop)] // two parallel mutable arrays — index-based is clearer
-pub async fn recv_batch_connected(
-    socket: &UdpSocket,
-    buf: &mut BatchBuf,
-) -> io::Result<usize> {
+pub async fn recv_batch_connected(socket: &UdpSocket, buf: &mut BatchBuf) -> io::Result<usize> {
     use std::mem;
     use std::os::fd::AsRawFd;
     use tokio::io::Interest;
@@ -190,9 +186,7 @@ pub async fn recv_batch_connected(
 }
 
 #[cfg(target_os = "linux")]
-unsafe fn sockaddr_storage_to_socket_addr(
-    storage: &libc::sockaddr_storage,
-) -> Option<SocketAddr> {
+unsafe fn sockaddr_storage_to_socket_addr(storage: &libc::sockaddr_storage) -> Option<SocketAddr> {
     use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 
     match storage.ss_family as libc::c_int {
@@ -228,10 +222,7 @@ pub async fn recv_batch(socket: &UdpSocket, buf: &mut BatchBuf) -> io::Result<us
 }
 
 #[cfg(not(target_os = "linux"))]
-pub async fn recv_batch_connected(
-    socket: &UdpSocket,
-    buf: &mut BatchBuf,
-) -> io::Result<usize> {
+pub async fn recv_batch_connected(socket: &UdpSocket, buf: &mut BatchBuf) -> io::Result<usize> {
     let slot = buf.slot_mut_full(0);
     let bytes_read = socket.recv(slot).await?;
     buf.lens[0] = bytes_read;

@@ -187,8 +187,9 @@ fn build_resolver(dns_server: Option<SocketAddr>) -> Result<TokioResolver> {
             let config = ResolverConfig::from_parts(None, vec![], group);
             TokioResolver::builder_with_config(config, provider)
         }
-        None => TokioResolver::builder(provider)
-            .context("failed to initialize system DNS resolver")?,
+        None => {
+            TokioResolver::builder(provider).context("failed to initialize system DNS resolver")?
+        }
     };
 
     Ok(builder.build())
