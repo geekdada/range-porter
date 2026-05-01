@@ -227,10 +227,10 @@ prompt_optional() {
 }
 
 collect_config() {
-  echo
-  echo "=== range-porter service configuration ==="
-  echo "Press Enter to accept defaults. Required fields (*)."
-  echo
+  # All user-facing output goes to stderr so command substitution
+  # only captures the final exec_args line on stdout.
+  printf >&2 '\n=== range-porter service configuration ===\n'
+  printf >&2 'Press Enter to accept defaults. Required fields (*).\n\n'
 
   local listen_host listen_ports target dns_server udp_idle
   local stats_bind stats_window summary_interval max_tcp
@@ -245,18 +245,17 @@ collect_config() {
   summary_interval="$(prompt_optional "  Summary interval" "$DEFAULT_SUMMARY_INTERVAL")"
   max_tcp="$(prompt_optional "  Max TCP connections" "$DEFAULT_MAX_TCP_CONNECTIONS")"
 
-  echo
-  echo "--- Summary ---"
-  echo "  Listen host:      $listen_host"
-  echo "  Listen ports:     $listen_ports"
-  echo "  Target:           $target"
-  [ -n "$dns_server" ]      && echo "  DNS server:       $dns_server"
-  echo "  UDP idle timeout: $udp_idle"
-  [ -n "$stats_bind" ]      && echo "  Stats bind:       $stats_bind"
-  echo "  Stats window:     $stats_window"
-  echo "  Summary interval: $summary_interval"
-  echo "  Max TCP conns:    $max_tcp"
-  echo
+  printf >&2 '\n--- Summary ---\n'
+  printf >&2 '  Listen host:      %s\n' "$listen_host"
+  printf >&2 '  Listen ports:     %s\n' "$listen_ports"
+  printf >&2 '  Target:           %s\n' "$target"
+  [ -n "$dns_server" ]      && printf >&2 '  DNS server:       %s\n' "$dns_server"
+  printf >&2 '  UDP idle timeout: %s\n' "$udp_idle"
+  [ -n "$stats_bind" ]      && printf >&2 '  Stats bind:       %s\n' "$stats_bind"
+  printf >&2 '  Stats window:     %s\n' "$stats_window"
+  printf >&2 '  Summary interval: %s\n' "$summary_interval"
+  printf >&2 '  Max TCP conns:    %s\n' "$max_tcp"
+  printf >&2 '\n'
 
   read -r -p "Proceed with this configuration? [Y/n] " confirm
   case "${confirm:-y}" in
@@ -264,7 +263,7 @@ collect_config() {
     *) die "aborted" ;;
   esac
 
-  # Build the ExecStart line.
+  # Build the ExecStart line — this is the only stdout output.
   local exec_args="--listen-host ${listen_host} --listen-ports ${listen_ports} --target ${target}"
   exec_args="${exec_args} --udp-idle-timeout ${udp_idle}"
   exec_args="${exec_args} --stats-window ${stats_window}"
