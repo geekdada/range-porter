@@ -306,7 +306,6 @@ UNIT_EOF
 install_service() {
   require_systemd
   log "installing/updating ${SERVICE_NAME} service..."
-  upgrade_binary
 
   local exec_args
   if [ $# -gt 0 ]; then
