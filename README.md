@@ -100,6 +100,7 @@ cargo bench --bench core
 ## Caveats
 
 - UDP forwarding is session-based. Idle sessions are evicted after `--udp-idle-timeout`.
+- TCP keepalive runs on both sides of every forwarded connection: probes start after 60s of silence and repeat every 10s. After 6 unanswered probes the connection is closed, so a client that disappears without closing is released after about 2 minutes.
 - The UDP target sees the forwarder's upstream socket as the packet source, not the original client address.
 - Large port ranges create one TCP listener and one UDP socket per port.
 - This tool competes with other userspace forwarders on ergonomics and observability, not with kernel data-plane throughput.

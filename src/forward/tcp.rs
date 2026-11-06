@@ -1,3 +1,4 @@
+use crate::socket::configure_tcp_stream;
 use crate::stats::port::PortStats;
 use crate::target::TargetAddr;
 use std::net::SocketAddr;
@@ -16,11 +17,15 @@ pub async fn proxy(
     shutdown: CancellationToken,
 ) {
     let target_addr = target.current();
-    let _ = downstream.set_nodelay(true);
+    if let Err(error) = configure_tcp_stream(&downstream) {
+        warn!(%peer, ?error, "failed to set tcp options on downstream socket");
+    }
 
     let forwarding = async {
         let mut upstream = TcpStream::connect(target_addr).await?;
-        let _ = upstream.set_nodelay(true);
+        if let Err(error) = configure_tcp_stream(&upstream) {
+            warn!(target = %target_addr, ?error, "failed to set tcp options on upstream socket");
+        }
         tokio::io::copy_bidirectional_with_sizes(
             &mut downstream,
             &mut upstream,
